@@ -57,6 +57,13 @@ class FRMELoader extends Loader {
 	parse( data ) {
 
 
+        function chunkArray(a, s) {
+            return Array.from(
+                new Array(Math.ceil(a.length / s)),
+                (_, i) => a.slice(i * s, i * s + s)
+            );
+        }
+        
         function createCube(w, h, d, c) {
             return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ "color": c }));
         }
