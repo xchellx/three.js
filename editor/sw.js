@@ -225,6 +225,9 @@ const assets = [
 	'./js/commands/SetMaterialValueCommand.js',
 	'./js/commands/SetMaterialVectorCommand.js',
 	'./js/commands/SetSceneCommand.js',
+	'./js/commands/ApplyMatrix4Command.js',
+	'./js/commands/RotateAxisCommand.js',
+	'./js/commands/SetMatrix4Command.js',
 	'./js/commands/Commands.js',
 
 	//

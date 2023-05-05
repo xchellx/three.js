@@ -57,13 +57,6 @@ class FRMELoader extends Loader {
 	parse( data ) {
 
 
-        function chunkArray(a, s) {
-            return Array.from(
-                new Array(Math.ceil(a.length / s)),
-                (_, i) => a.slice(i * s, i * s + s)
-            );
-        }
-        
         function createCube(w, h, d, c) {
             return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ "color": c }));
         }
@@ -142,7 +135,8 @@ class FRMELoader extends Loader {
                 
                 material.vtxAttrFlags = reader.readUInt32BE();
                 
-                // MP2 has two uint32s here but MP2Demo does not
+                // MP2 has two uint32s here but MP2Demo does not.
+                // However, they do exist in MP2Demo HMDLs.
                 reader.skip(12);
                 
                 const enableKonst = ((materialFlags & 0x8) >>> 0) === 0x8;
@@ -198,7 +192,7 @@ class FRMELoader extends Loader {
                 }
                 
                 if ((reader.offset - uvAnimsStart) !== uvAnimsSize)
-                    throw new Error(`#${i} Read past UVAnimation size ${uvAnimsSize} for material ${i2}}.`);
+                    throw new Error(`#${i} Read past UVAnimation size ${uvAnimsSize} for material #${i2}}.`);
                 
                 materials.push(material);
                 
@@ -210,8 +204,8 @@ class FRMELoader extends Loader {
             const modelSectionCount = modelCount - 1;
             for (let i = 0; i < modelCount; i++) {
                 if (i > modelSectionCount) {
-                    console.warn(`Model count exceeds model section count: there may be MODLs without a direct \
-CMDL reference instead of a model index, causing an imblanence with the model count. ${i}/${modelSectionCount}`);
+                    console.warn(`Model count exceeds model section count: there may be MODLs with a direct CMDL \
+reference instead of a model index, causing an imblanence with the model count. ${i}/${modelSectionCount}`);
                     break;
                 }
                 
@@ -270,13 +264,14 @@ CMDL reference instead of a model index, causing an imblanence with the model co
                     // Surface settings from material vertex format flags
                     const curMat = materials[materialID];
                     if (typeof (curMat ?? undefined) === "undefined")
-                        throw new Error(`#${i} Invalid Surface Material ID ${materialID} at surface ${i2}`);
+                        throw new Error(`#${i} Invalid Surface Material ID ${materialID} at surface #${i2}`);
                     
                     const displayListFlags = reader.readUInt32BE();
                     const displayListSize = (displayListFlags & 0x7FFFFFFF) >>> 0;
                     
                     reader.skip(8);
                     const extraDataSize = reader.readUInt32BE();
+                    // The 4 is MP2 stuff, which does exist in MP2Demo HMDLs (not sure about CMDLs)
                     reader.skip(12 + 4 + extraDataSize);
                     
                     // 32byte alignment
@@ -287,15 +282,15 @@ CMDL reference instead of a model index, causing an imblanence with the model co
                     while (reader.offset < displayListStart + displayListSize) {
                         const primitive = {};
                         
-                        // The display list size also includes the padding
+                        // The display list size includes GX_NOP calls, it does not stop at that.
                         const primitiveFlags = reader.readUInt8();
                         primitive.primitiveType = (primitiveFlags & 0xF8) >>> 0;
                         if (primitive.primitiveType != GX_NOP) {
                             if (primitive.primitiveType !== GX_DRAW_TRIANGLES 
                             && primitive.primitiveType !== GX_DRAW_TRIANGLE_STRIP
                             && primitive.primitiveType !== GX_DRAW_TRIANGLE_FAN) {
-                                console.warn(`Unsupported primitive type ${primitive.primitiveType} in surface ${i2} \
-in model ${i}. This primitive will be read but not parsed.`);
+                                console.warn(`#${i} Unsupported primitive type ${primitive.primitiveType} at surface \
+#${i2}. This primitive will be read but not parsed.`);
                                 primitive.supported = false;
                             } else
                                 primitive.supported = true;

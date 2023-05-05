@@ -19,3 +19,6 @@ export { SetSceneCommand } from './SetSceneCommand.js';
 export { SetScriptValueCommand } from './SetScriptValueCommand.js';
 export { SetUuidCommand } from './SetUuidCommand.js';
 export { SetValueCommand } from './SetValueCommand.js';
+export { ApplyMatrix4Command } from './ApplyMatrix4Command.js';
+export { RotateAxisCommand } from './RotateAxisCommand.js';
+export { SetMatrix4Command } from './SetMatrix4Command.js';
