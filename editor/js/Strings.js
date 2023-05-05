@@ -32,6 +32,9 @@ function Strings( config ) {
 			'menubar/edit/clone': 'Clone',
 			'menubar/edit/delete': 'Delete (Del)',
 			'menubar/edit/fixcolormaps': 'Fix Color Maps',
+			'menubar/edit/getbasistrans': 'Get Basis and Translation',
+			'menubar/edit/fixcam': 'Fix Camera',
+			'menubar/edit/unfixcam': 'Unfix Camera',
 
 			'menubar/add': 'Add',
 			'menubar/add/group': 'Group',
@@ -384,6 +387,9 @@ function Strings( config ) {
 			'menubar/edit/clone': 'Cloner',
 			'menubar/edit/delete': 'Supprimer (Supp)',
 			'menubar/edit/fixcolormaps': 'Correction des couleurs',
+			'menubar/edit/getbasistrans': 'Obtenir la base et la traduction',
+			'menubar/edit/fixcam': 'Ajouter un correctif à la caméra',
+			'menubar/edit/unfixcam': 'Supprimer le correctif de la caméra',
 
 			'menubar/add': 'Ajouter',
 			'menubar/add/group': 'Groupe',
@@ -736,6 +742,9 @@ function Strings( config ) {
 			'menubar/edit/clone': '拷贝',
 			'menubar/edit/delete': '删除 (Del)',
 			'menubar/edit/fixcolormaps': '修复颜色贴图',
+			'menubar/edit/getbasistrans': '获取基础和翻译',
+			'menubar/edit/fixcam': '为相机添加修复',
+			'menubar/edit/unfixcam': '从相机中删除修复',
 
 			'menubar/add': '添加',
 			'menubar/add/group': '组',

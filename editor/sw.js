@@ -29,6 +29,12 @@ const assets = [
 	'../examples/jsm/libs/rhino3dm/rhino3dm.wasm',
 	'../examples/jsm/libs/rhino3dm/rhino3dm.js',
 
+	'../examples/jsm/libs/buffer-stream-js/utils.js',
+	'../examples/jsm/libs/buffer-stream-js/text-coder.js',
+	'../examples/jsm/libs/buffer-stream-js/utf8-fl.js',
+	'../examples/jsm/libs/buffer-stream-js/uint8array-utils.js',
+	'../examples/jsm/libs/buffer-stream-js/buffer-stream-js.js',
+
 	'../examples/jsm/loaders/3DMLoader.js',
 	'../examples/jsm/loaders/3MFLoader.js',
 	'../examples/jsm/loaders/AMFLoader.js',
@@ -55,6 +61,7 @@ const assets = [
 	'../examples/jsm/loaders/VRMLLoader.js',
 	'../examples/jsm/loaders/VTKLoader.js',
 	'../examples/jsm/loaders/XYZLoader.js',
+	'../examples/jsm/loaders/FRMELoader.js',
 
 	'../examples/jsm/curves/NURBSCurve.js',
 	'../examples/jsm/curves/NURBSUtils.js',

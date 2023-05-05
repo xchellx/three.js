@@ -3,7 +3,9 @@ import * as THREE from 'three';
 import { TGALoader } from 'three/addons/loaders/TGALoader.js';
 
 import { AddObjectCommand } from './commands/AddObjectCommand.js';
+import { MoveObjectCommand } from './commands/MoveObjectCommand.js';
 import { SetSceneCommand } from './commands/SetSceneCommand.js';
+import { SetMatrix4Command } from './commands/SetMatrix4Command.js';
 
 import { LoaderUtils } from './LoaderUtils.js';
 
@@ -778,6 +780,35 @@ function Loader( editor ) {
 				break;
 
 			}
+
+            case 'frme': {
+                reader.addEventListener("load", async function (event) {
+                    const contents = event.target.result;
+                    
+                    const { FRMELoader } = await import("three/addons/loaders/FRMELoader.js");
+                    
+                    const widgets = new FRMELoader().parse(contents);
+                    
+                    for (const widget in widgets) {
+                        widgets[widget].object.up.set(0, 0, 1);
+                        editor.execute(new AddObjectCommand(editor, widgets[widget].object));
+                        if (widgets[widget].parentName !== widgets[widget].rootName)
+                            editor.execute(new MoveObjectCommand(editor, widgets[widget].object, widgets[widgets[widget].parentName].object));
+                        editor.execute(new SetMatrix4Command(editor, widgets[widget].object, new THREE.Matrix4()
+                            .set(
+                                widgets[widget].orient[0], widgets[widget].orient[1], widgets[widget].orient[2], widgets[widget].trans[0],
+                                widgets[widget].orient[3], widgets[widget].orient[4], widgets[widget].orient[5], widgets[widget].trans[1],
+                                widgets[widget].orient[6], widgets[widget].orient[7], widgets[widget].orient[8], widgets[widget].trans[2],
+                                0, 0, 0, 1
+                            )
+                        ));
+                        if (widgets[widget].object.isPerspectiveCamera || widgets[widget].object.isOrthographicCamera)
+                            widgets[widget].object.updateProjectionMatrix();
+                    }
+                }, false);
+                reader.readAsArrayBuffer(file);
+                break;
+            }
 
 			case 'zip':
 

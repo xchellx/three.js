@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
-import { UIPanel } from './libs/ui.js';
+import { UIPanel, UISelect } from './libs/ui.js';
 
 import { EditorControls } from './EditorControls.js';
 
@@ -27,6 +27,36 @@ function Viewport( editor ) {
 	container.setId( 'viewport' );
 	container.setPosition( 'absolute' );
 
+    const hideUI = new UISelect();
+    hideUI.setPosition('absolute');
+    hideUI.setRight('230px');
+    hideUI.setTop('10px');
+    hideUI.setOptions({ 'show_ui': 'show_ui', 'hide_ui': 'hide_ui' });
+    hideUI.setValue('show_ui');
+    hideUI.onChange(function() {
+        if (this.getValue() === 'hide_ui') {
+            document.getElementById('sidebar').style.cssText += ';display: none';
+            document.getElementById('menubar').style.cssText += ';display: none';
+            document.getElementById('sidebar').style.cssText += ';overflow: hidden';
+            document.getElementById('menubar').style.cssText += ';overflow: hidden';
+            document.getElementById('sidebar').style.cssText += ';width: 0px';
+            document.getElementById('menubar').style.cssText += ';width: 0px';
+            document.getElementById('sidebar').style.cssText += ';height: 0px';
+            document.getElementById('menubar').style.cssText += ';height: 0px';
+        } else if (this.getValue() === 'show_ui') {
+            document.getElementById('sidebar').style.cssText = document.getElementById('sidebar').style.cssText.replace(/(?:;|)(?:\s+|)display:(?:\s+|)none/, '');
+            document.getElementById('menubar').style.cssText = document.getElementById('menubar').style.cssText.replace(/(?:;|)(?:\s+|)display:(?:\s+|)none/, '');
+            document.getElementById('sidebar').style.cssText = document.getElementById('sidebar').style.cssText.replace(/(?:;|)(?:\s+|)overflow:(?:\s+|)hidden/, '');
+            document.getElementById('menubar').style.cssText = document.getElementById('menubar').style.cssText.replace(/(?:;|)(?:\s+|)overflow:(?:\s+|)hidden/, '');
+            document.getElementById('sidebar').style.cssText = document.getElementById('sidebar').style.cssText.replace(/(?:;|)(?:\s+|)width:(?:\s+|)0px/, '');
+            document.getElementById('menubar').style.cssText = document.getElementById('menubar').style.cssText.replace(/(?:;|)(?:\s+|)width:(?:\s+|)0px/, '');
+            document.getElementById('sidebar').style.cssText = document.getElementById('sidebar').style.cssText.replace(/(?:;|)(?:\s+|)height:(?:\s+|)0px/, '');
+            document.getElementById('menubar').style.cssText = document.getElementById('menubar').style.cssText.replace(/(?:;|)(?:\s+|)height:(?:\s+|)0px/, '');
+        } else
+            throw new Error('Here be dragons...');
+    }, false);
+
+	container.add( hideUI );
 	container.add( new ViewportCamera( editor ) );
 	container.add( new ViewportShading( editor ) );
 	container.add( new ViewportInfo( editor ) );
@@ -49,11 +79,13 @@ function Viewport( editor ) {
 	const grid1 = new THREE.GridHelper( 30, 30, 0x888888 );
 	grid1.material.color.setHex( 0x888888 );
 	grid1.material.vertexColors = false;
-	grid.add( grid1 );
+	grid1.rotateX(Math.PI / 2);
+	grid.add( grid1 ); 
 
 	const grid2 = new THREE.GridHelper( 30, 6, 0x222222 );
 	grid2.material.color.setHex( 0x222222 );
 	grid2.material.vertexColors = false;
+	grid2.rotateX(Math.PI / 2); 
 	grid.add( grid2 );
 
 	const viewHelper = new ViewHelper( camera, container );

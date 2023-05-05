@@ -5,6 +5,7 @@ import { UIPanel, UIRow, UIHorizontalRule } from './libs/ui.js';
 import { AddObjectCommand } from './commands/AddObjectCommand.js';
 import { RemoveObjectCommand } from './commands/RemoveObjectCommand.js';
 import { SetPositionCommand } from './commands/SetPositionCommand.js';
+import { RotateAxisCommand } from './commands/RotateAxisCommand.js';
 
 function MenubarEdit( editor ) {
 
@@ -163,6 +164,62 @@ function MenubarEdit( editor ) {
 
 	} );
 	options.add( option );
+
+    // Get Basis Translation
+    
+    option = new UIRow();
+    option.setClass("option");
+    option.setTextContent( strings.getKey("menubar/edit/getbasistrans"));
+    option.onClick( function () {
+        const obj = editor.selected;
+        if (obj !== null) {
+            const athv = new DataView(new ArrayBuffer(4));
+            function ath(a, v) {
+                return a.reduce((a, o) => {
+                    v.setFloat32(0, o, false);
+                    return a + Array.apply(null, { length: 4 })
+                        .map((_, i) => v.getUint8(i).toString(16).toUpperCase().padStart(2, "0"))
+                        .join('') + " ";
+                }, "");
+            }
+            
+            const trans = [obj.matrix.elements[12], obj.matrix.elements[13], obj.matrix.elements[14]];
+            const orient = [
+                obj.matrix.elements[0], obj.matrix.elements[4], obj.matrix.elements[8],
+                obj.matrix.elements[1], obj.matrix.elements[5], obj.matrix.elements[9],
+                obj.matrix.elements[2], obj.matrix.elements[6], obj.matrix.elements[10]
+            ];
+            window.alert(`- ${obj.name}\n- ${ath(trans, athv)}\n- ${ath(orient, athv)}`);
+        }
+    } );
+    options.add(option);
+
+    // Fix Camera
+    
+    function fixUnfixCamera(fixOrUnfix) {
+        const obj = editor.selected;
+        if (obj !== null) {
+            if (obj.isPerspectiveCamera || obj.isOrthographicCamera) {
+                editor.execute(new RotateAxisCommand(editor, obj, "X", fixOrUnfix ? THREE.MathUtils.degToRad(90) : THREE.MathUtils.degToRad(-90)));
+                obj.updateProjectionMatrix();
+            } else
+                window.alert("Please select a camera...");
+        }
+    }
+    
+    option = new UIRow();
+    option.setClass("option");
+    option.setTextContent( strings.getKey("menubar/edit/fixcam"));
+    option.onClick( function () { fixUnfixCamera(true); } );
+    options.add(option);
+
+    // Unfix Camera
+    
+    option = new UIRow();
+    option.setClass("option");
+    option.setTextContent( strings.getKey("menubar/edit/unfixcam"));
+    option.onClick( function () { fixUnfixCamera(false); } );
+    options.add(option);
 
 	const colorMaps = [ 'map', 'envMap', 'emissiveMap' ];
 
