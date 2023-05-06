@@ -409,7 +409,6 @@ reference instead of a model index, causing an imblanence with the model count. 
                     surfaces.push(surface);
                 }
                 
-                let error = "";
                 let color = clGrey;
                 const surfGeoms = [];
                 for (const surface of surfaces) {
