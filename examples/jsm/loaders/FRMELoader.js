@@ -10,6 +10,7 @@ import {
 import { BufferStreamOptions, BufferStream } from "three/addons/libs/buffer-stream-js/buffer-stream-js.js";
 import { toTrianglesDrawMode, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
+// Based on STLLoader
 class FRMELoader extends Loader {
 
 	constructor( manager ) {
@@ -55,7 +56,6 @@ class FRMELoader extends Loader {
 	}
 
 	parse( data ) {
-
 
         // Common colors
         const clGrey = 0x808080,
@@ -119,7 +119,7 @@ class FRMELoader extends Loader {
             sectionTracker.nextOffs = sectionTracker.curOffs + sectionSizes[sectionTracker.curSection];
         }
         
-        function readHMDL(reader, modelCount, sectionCount, allocSize) {
+        function readHMDL(reader, allocSize, modelCount, sectionCount) {
             const sectionSizes = [];
             for (let i = 0; i < sectionCount; i++)
                 sectionSizes.push(reader.readUInt32BE());
@@ -159,8 +159,8 @@ class FRMELoader extends Loader {
                 material.vtxAttrFlags = reader.readUInt32BE();
                 
                 // MP2 has two uint32s here but MP2Demo does not.
-                // However, they do exist in MP2Demo HMDLs.
-                reader.skip(12);
+                // However, they do exist in MP2Demo HMDLs (this is what the 8 is).
+                reader.skip(8 + 4);
                 
                 const enableKonst = ((materialFlags & 0x8) >>> 0) === 0x8;
                 if (enableKonst) {
@@ -227,6 +227,7 @@ class FRMELoader extends Loader {
             const modelSectionCount = modelCount - 1;
             for (let i = 0; i < modelCount; i++) {
                 if (i > modelSectionCount) {
+                    // Can this even happen? Not sure but just to be safe, this is here.
                     console.warn(`Model count exceeds model section count: there may be MODLs with a direct CMDL \
 reference instead of a model index, causing an imblanence with the model count. ${i}/${modelSectionCount}`);
                     break;
@@ -316,6 +317,8 @@ reference instead of a model index, causing an imblanence with the model count. 
                         && primitive.primitiveType !== GX_DRAW_TRIANGLE_STRIP
                         && primitive.primitiveType !== GX_DRAW_TRIANGLE_FAN
                         && primitive.primitiveType !== GX_NOP) {
+                            // This is not a big deal: The game only ever uses triangles, triangle strips, and triangle
+                            // fans. See: https://wiki.axiodl.com/w/Geometry_(Metroid_Prime)#Surface
                             console.warn(`#${i} Unsupported primitive type ${primitive.primitiveType} at surface \
 #${i2}. This primitive will be read but not parsed.`);
                             primitive.supported = false;
@@ -482,10 +485,7 @@ reference instead of a model index, causing an imblanence with the model count. 
             return objects;
         }
         
-        function parseBinary(data) {
-            
-            const reader = new BufferStream(data, new BufferStreamOptions({ "allowExtend": false }));
-            
+        function readFRME(reader) {
             const version = reader.readUInt32BE();
             if (version !== 4)
                 throw new Error("Only version 4 is supported for now");
@@ -496,14 +496,14 @@ reference instead of a model index, causing an imblanence with the model count. 
                 reader.skip(8);
             
             // allocSize is the size of the section data of it's entirity AFTER the section count and the subsequent
-            // section sizes (if there are any)
+            // section sizes (if there are any). This is 0 when modelCount is 0 however we still use it just to be safe
             const allocSize = reader.readUInt32BE();
             const modelCount = reader.readUInt32BE();
             const sectionCount = reader.readUInt32BE();
             const modelStart = reader.offset;
             let models;
             if (modelCount > 0) {
-                models = readHMDL(reader, modelCount, sectionCount, allocSize);
+                models = readHMDL(reader, allocSize, modelCount, sectionCount);
             } else
                 reader.seek(modelStart + allocSize);
             
@@ -520,7 +520,7 @@ reference instead of a model index, causing an imblanence with the model count. 
                     throw new Error(`Duplicate names are not allowed: "${widget.name}"`);
                 widget.parentName = reader.readUtf8String();
                 widget.rootName = "kGSYS_InvalidWidgetID";
-                if (widget.parentName == widget.rootName) {
+                if (widget.parentName === widget.rootName) {
                     if (rootWidget !== null)
                         throw new Error(`There can only be one root widget: "${rootWidget.name}", "${widget.name}"`);
                     else
@@ -593,7 +593,7 @@ reference instead of a model index, causing an imblanence with the model count. 
                         const cmdlRef = reader.readUInt32BE();
                         const modelIndex = reader.readUInt32BE();
                         reader.skip(4);
-                        if (cmdlRef == 0xFFFFFFFF)
+                        if (cmdlRef === 0xFFFFFFFF)
                             widget.obj = models[modelIndex];
                         else
                             // TODO: Parse CMDL (is that ever used in MP2?)
@@ -648,6 +648,14 @@ reference instead of a model index, causing an imblanence with the model count. 
             
             return widgets;
         }
+
+		function parseBinary( data ) {
+
+			const reader = new BufferStream( data, new BufferStreamOptions( { 'allowExtend': false } ) );
+			const widgets = readFRME( reader );
+			return widgets;
+
+		}
 
 		function ensureBinary( buffer ) {
 
