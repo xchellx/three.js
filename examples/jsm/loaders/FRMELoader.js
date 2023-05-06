@@ -57,13 +57,6 @@ class FRMELoader extends Loader {
 	parse( data ) {
 
 
-        function chunkArray(a, s) {
-            return Array.from(
-                new Array(Math.ceil(a.length / s)),
-                (_, i) => a.slice(i * s, i * s + s)
-            );
-        }
-        
         function createCube(w, h, d, c) {
             return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ "color": c }));
         }
@@ -223,12 +216,13 @@ reference instead of a model index, causing an imblanence with the model count. 
                     vertices.push([reader.readFloatBE(), reader.readFloatBE(), reader.readFloatBE()]);
                 
                 // Normals - Section: 2
-                // HDML never has short normals, in fact it cannot because HDML has no CMDL header and therefore no
-                // flags to specify if it does have them. Therefore, the normals are always 32bit floats.
+                // HDML always has short normals, in fact it cannot specify if it does not have them because HDML has
+                // no CMDL header and therefore no flags to specify if it does not have them. Therefore, the normals
+                // are always 16bit floats.
                 gotoNextSection(reader, sectionTracker, sectionSizes);
                 const normals = [];
-                for (let i2 = 0; i2 < (sectionSizes[sectionTracker.curSection] / (4 * 3)); i2++)
-                    normals.push([reader.readFloatBE(), reader.readFloatBE(), reader.readFloatBE()]);
+                for (let i2 = 0; i2 < (sectionSizes[sectionTracker.curSection] / (2 * 3)); i2++)
+                    normals.push([reader.readUInt16BE(), reader.readUInt16BE(), reader.readUInt16BE()]);
                 
                 // Colors - Section: 3
                 // This data is actually used in some HDMLs, despite CMDLs never using it. However, unless we care
@@ -288,24 +282,24 @@ reference instead of a model index, causing an imblanence with the model count. 
                     const displayListStart = reader.offset;
                     while (reader.offset < displayListStart + displayListSize) {
                         const primitive = {};
+                        primitive.vertices = [];
+                        primitive.normals = [];
+                        primitive.uvs = [];
                         
                         // The display list size includes GX_NOP calls, it does not stop at that.
                         const primitiveFlags = reader.readUInt8();
                         primitive.primitiveType = (primitiveFlags & 0xF8) >>> 0;
-                        if (primitive.primitiveType != GX_NOP) {
-                            if (primitive.primitiveType !== GX_DRAW_TRIANGLES 
-                            && primitive.primitiveType !== GX_DRAW_TRIANGLE_STRIP
-                            && primitive.primitiveType !== GX_DRAW_TRIANGLE_FAN) {
-                                console.warn(`#${i} Unsupported primitive type ${primitive.primitiveType} at surface \
+                        if (primitive.primitiveType !== GX_DRAW_TRIANGLES 
+                        && primitive.primitiveType !== GX_DRAW_TRIANGLE_STRIP
+                        && primitive.primitiveType !== GX_DRAW_TRIANGLE_FAN
+                        && primitive.primitiveType !== GX_NOP) {
+                            console.warn(`#${i} Unsupported primitive type ${primitive.primitiveType} at surface \
 #${i2}. This primitive will be read but not parsed.`);
-                                primitive.supported = false;
-                            } else
-                                primitive.supported = true;
-                            
+                            primitive.supported = false;
+                        } else
+                            primitive.supported = true;
+                        if (primitive.primitiveType !== GX_NOP) {
                             const vertexCount = reader.readUInt16BE();
-                            primitive.vertices = [];
-                            primitive.normals = [];
-                            primitive.uvs = [];
                             for (let i3 = 0; i3 < vertexCount; i3++) {
                                 // Vertex matrix
                                 const pnMtxIdx = ((curMat.vtxAttrFlags & 0x1000000) >>> 0) === 0x1000000;
@@ -340,14 +334,14 @@ reference instead of a model index, causing an imblanence with the model count. 
                                 if (pos)
                                     primitive.vertices.push(vertices[reader.readUInt16BE()]);
                                 else
-                                    primitive.vertices.push(0.0);
+                                    primitive.vertices.push([0.0, 0.0, 0.0]);
                                 
                                 // Normal index
                                 const nrm = ((curMat.vtxAttrFlags & 0xC) >>> 0) === 0xC;
                                 if (nrm)
                                     primitive.normals.push(normals[reader.readUInt16BE()]);
                                 else
-                                    primitive.normals.push(0.0);
+                                    primitive.normals.push([0.0, 0.0, 0.0]);
                                 
                                 // Color 0 index
                                 const clr0 = ((curMat.vtxAttrFlags & 0x30) >>> 0) === 0x30;
@@ -370,7 +364,7 @@ reference instead of a model index, causing an imblanence with the model count. 
                                 if (tex0)
                                     primitive.uvs.push(uvs[reader.readUInt16BE()]);
                                 else
-                                    primitive.uvs.push(0.0);
+                                    primitive.uvs.push([0.0, 0.0]);
                                 // Even if UV1 may exist, it is useless. HMDL has no CMDL header so it cannot specify
                                 // if it has lightmap UVs in it's flags field. Therefore, UV1 is pointless.
                                 if (tex1)
@@ -386,16 +380,14 @@ reference instead of a model index, causing an imblanence with the model count. 
                                 if (tex6)
                                     reader.skip(2);
                             }
-                            
-                            surface.primitives.push(primitive);
                         }
+                        surface.primitives.push(primitive);
                     }
                     
                     surfaces.push(surface);
                 }
                 
                 const object = new THREE.Group();
-                // TODO: Parse into THREE.Mesh here...
                 let i2 = 1;
                 for (const surface of surfaces) {
                     // TODO: surface.pivot
@@ -403,52 +395,55 @@ reference instead of a model index, causing an imblanence with the model count. 
                     const surfaceObject = new THREE.Group();
                     surfaceObject.name = `Model ${i} - Surface ${i2}`;
                     for (const primitive of surface.primitives) {
-                        let mesh;
-                        if (primitive.supported) {
-                            const posArr = chunkArray(primitive.vertices, 3);
-                            const nrmArr = chunkArray(primitive.normals, 3);
-                            const uvArr = chunkArray(primitive.uvs, 2);
+                        if (primitive.primitiveType !== GX_NOP) {
+                            let mesh;
+                            if (primitive.supported) {
+                                const posArr = primitive.vertices;
+                                const nrmArr = primitive.normals;
+                                const uvArr = primitive.uvs;
+                                
+                                const posBuff = new Float32Array(posArr.length * 3);
+                                let posIdx = 0;
+                                for (const pos of posArr) {
+                                    posBuff.set(pos, posIdx);
+                                    posIdx += 3;
+                                }
+                                
+                                const nrmBuff = new Float32Array(nrmArr.length * 3);
+                                let nrmIdx = 0;
+                                for (const nrm of nrmArr) {
+                                    nrmBuff.set(nrm, nrmIdx);
+                                    nrmIdx += 3;
+                                }
+                                
+                                const uvBuff  = new Float32Array(uvArr.length * 2);
+                                let uvIdx = 0;
+                                for (const uv of uvArr) {
+                                    uvBuff.set(uv, uvIdx);
+                                    uvIdx += 2;
+                                }
+                                
+                                let geometry = new THREE.BufferGeometry();
+                                geometry.setAttribute("position", new THREE.BufferAttribute(posBuff, 3));
+                                geometry.setAttribute("normal", new THREE.BufferAttribute(nrmBuff, 3));
+                                geometry.setAttribute("uv", new THREE.BufferAttribute(uvBuff, 2));
                             
-                            const vtxBuff = new Float32Array(posArr.length * 3);
-                            let vtxIdx = 0;
-                            for (const vtx of posArr) {
-                                vtxBuff.set(vtx, vtxIdx);
-                                vtxIdx += 3;
+                                // Triangulize
+                                if (primitive.primitiveType === GX_DRAW_TRIANGLE_STRIP)
+                                    geometry = toTrianglesDrawMode(geometry, THREE.TriangleStripDrawMode);
+                                else if (primitive.primitiveType === GX_DRAW_TRIANGLE_FAN)
+                                    geometry = toTrianglesDrawMode(geometry, THREE.TriangleFanDrawMode);
+                                
+                                mesh = new THREE.Mesh(geometry,
+                                    new THREE.MeshBasicMaterial({ "color": 0x808080, "side": THREE.DoubleSide }));
+                                mesh.name = `Primitive ${i3}`;
+                            } else {
+                                mesh = createCube(0.2, 0.2, 0.2, 0xFC0303);
+                                mesh.name = `(ERROR) Primitive ${i3}`;
                             }
-                            
-                            const nrmBuff = new Float32Array(nrmArr.length * 3);
-                            let nrmIdx = 0;
-                            for (const nrm of nrmArr) {
-                                nrmBuff.set(nrm, nrmIdx);
-                                nrmIdx += 3;
-                            }
-                            
-                            const uvBuff  = new Float32Array(uvArr.length * 2);
-                            let uvIdx = 0;
-                            for (const uv of uvArr) {
-                                uvBuff.set(uv, uvIdx);
-                                uvIdx += 2;
-                            }
-                            
-                            let geometry = new THREE.BufferGeometry();
-                            geometry.setAttribute("position", new THREE.BufferAttribute(vtxBuff, 3));
-                            geometry.setAttribute("normal", new THREE.BufferAttribute(nrmBuff, 3));
-                            geometry.setAttribute("uv", new THREE.BufferAttribute(uvBuff, 2));
-                        
-                            // Triangulize
-                            if (primitive.primitiveType === GX_DRAW_TRIANGLE_STRIP)
-                                geometry = toTrianglesDrawMode(geometry, THREE.TriangleStripDrawMode);
-                            else if (primitive.primitiveType === GX_DRAW_TRIANGLE_FAN)
-                                geometry = toTrianglesDrawMode(geometry, THREE.TriangleFanDrawMode);
-                            
-                            mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ "color": 0x808080 }));
-                            mesh.name = `Primitive ${i3}`;
-                        } else {
-                            mesh = createCube(0.2, 0.2, 0.2, 0xFC0303);
-                            mesh.name = `(ERROR) Primitive ${i3}`;
+                            surfaceObject.add(mesh);
+                            i3++;
                         }
-                        surfaceObject.add(mesh);
-                        i3++;
                     }
                     object.add(surfaceObject);
                     i2++;
