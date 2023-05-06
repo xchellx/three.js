@@ -8,7 +8,7 @@ import {
 } from 'three';
 
 import { BufferStreamOptions, BufferStream } from "three/addons/libs/buffer-stream-js/buffer-stream-js.js";
-import { toTrianglesDrawMode } from "three/addons/utils/BufferGeometryUtils.js";
+import { toTrianglesDrawMode, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 class FRMELoader extends Loader {
 
@@ -57,8 +57,35 @@ class FRMELoader extends Loader {
 	parse( data ) {
 
 
-        function createCube(w, h, d, c) {
-            return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ "color": c }));
+        // Common colors
+        const clGrey = 0x808080,
+            clWhite = 0xFFFFFF,
+            clBlack = 0x000000,
+            clYellow = 0xFFFF00,
+            clGreen = 0x00FF00,
+            clOrange = 0xFF8000,
+            clAqua = 0x00FFFF,
+            clRed = 0xFF0000,
+            clBlue = 0x0000FF,
+            clMagenta = 0xFF007F,
+            clPurple = 0x7F00FF,
+            clPink = 0xFF00FF;
+        
+        // CAMR Projection types
+        const CAMRProj_Perspective = 0x00,
+            CAMRProj_Orthographic = 0x01;
+        
+        // GX opcodes
+        const GX_NOP = 0x00,
+            GX_DRAW_TRIANGLES = 0x90,
+            GX_DRAW_TRIANGLE_STRIP = 0x98,
+            GX_DRAW_TRIANGLE_FAN = 0xA0;
+        
+        function createCube(w, h, d, c, g) {
+            const geometry = new THREE.BoxGeometry(w, h, d);
+            return (g ?? false)
+                ? geometry
+                : new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ "color": c }));
         }
         
         function createPlane(vc, va, uc, ua, c) {
@@ -85,18 +112,14 @@ class FRMELoader extends Loader {
             return new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ "color": c, "side": THREE.DoubleSide }));
         }
         
+        function gotoNextSection(reader, sectionTracker, sectionSizes) {
+            reader.seek(sectionTracker.nextOffs);
+            sectionTracker.curOffs = reader.offset;
+            sectionTracker.curSection += 1;
+            sectionTracker.nextOffs = sectionTracker.curOffs + sectionSizes[sectionTracker.curSection];
+        }
+        
         function readHMDL(reader, modelCount, sectionCount, allocSize) {
-            const GX_NOP = 0x00, GX_DRAW_TRIANGLES = 0x90, GX_DRAW_TRIANGLE_STRIP = 0x98, GX_DRAW_TRIANGLE_FAN = 0xA0;
-            
-            function gotoNextSection(reader, sectionTracker, sectionSizes) {
-                reader.seek(sectionTracker.nextOffs);
-                sectionTracker.curOffs = reader.offset;
-                sectionTracker.curSection += 1;
-                sectionTracker.nextOffs = sectionTracker.curOffs + sectionSizes[sectionTracker.curSection];
-            }
-            
-            debugger;
-            
             const sectionSizes = [];
             for (let i = 0; i < sectionCount; i++)
                 sectionSizes.push(reader.readUInt32BE());
@@ -383,20 +406,18 @@ reference instead of a model index, causing an imblanence with the model count. 
                         }
                         surface.primitives.push(primitive);
                     }
-                    
                     surfaces.push(surface);
                 }
                 
-                const object = new THREE.Group();
-                let i2 = 1;
+                let error = "";
+                let color = clGrey;
+                const surfGeoms = [];
                 for (const surface of surfaces) {
                     // TODO: surface.pivot
-                    let i3 = 1;
-                    const surfaceObject = new THREE.Group();
-                    surfaceObject.name = `Model ${i} - Surface ${i2}`;
+                    const primGeoms = [];
                     for (const primitive of surface.primitives) {
                         if (primitive.primitiveType !== GX_NOP) {
-                            let mesh;
+                            let primGeom;
                             if (primitive.supported) {
                                 const posArr = primitive.vertices;
                                 const nrmArr = primitive.normals;
@@ -423,32 +444,41 @@ reference instead of a model index, causing an imblanence with the model count. 
                                     uvIdx += 2;
                                 }
                                 
-                                let geometry = new THREE.BufferGeometry();
-                                geometry.setAttribute("position", new THREE.BufferAttribute(posBuff, 3));
-                                geometry.setAttribute("normal", new THREE.BufferAttribute(nrmBuff, 3));
-                                geometry.setAttribute("uv", new THREE.BufferAttribute(uvBuff, 2));
-                            
+                                primGeom = new THREE.BufferGeometry();
+                                primGeom.setAttribute("position", new THREE.BufferAttribute(posBuff, 3));
+                                primGeom.setAttribute("normal", new THREE.BufferAttribute(nrmBuff, 3));
+                                primGeom.setAttribute("uv", new THREE.BufferAttribute(uvBuff, 2));
+                                
                                 // Triangulize
                                 if (primitive.primitiveType === GX_DRAW_TRIANGLE_STRIP)
-                                    geometry = toTrianglesDrawMode(geometry, THREE.TriangleStripDrawMode);
+                                    primGeom = toTrianglesDrawMode(primGeom, THREE.TriangleStripDrawMode);
                                 else if (primitive.primitiveType === GX_DRAW_TRIANGLE_FAN)
-                                    geometry = toTrianglesDrawMode(geometry, THREE.TriangleFanDrawMode);
-                                
-                                mesh = new THREE.Mesh(geometry,
-                                    new THREE.MeshBasicMaterial({ "color": 0x808080, "side": THREE.DoubleSide }));
-                                mesh.name = `Primitive ${i3}`;
+                                    primGeom = toTrianglesDrawMode(primGeom, THREE.TriangleFanDrawMode);
+                                else {
+                                    // GX_DRAW_TRIANGLES does not need to be triangulized but it does have to be
+                                    // indexed, as triangulization of the other primitive types index them. This
+                                    // is because for merging, all BufferGeometry must be indexed (or not indexed).
+                                    // Indexed beats majority here, so this must be indexed. The indices can just
+                                    // be incrementive, as there is no reusal of vertices.
+                                    const indxCount = posArr.length;
+                                    const indxBuff = new Uint8Array(indxCount);
+                                    for (let indIdx = 0; indIdx < indxCount; indIdx++)
+                                        indxBuff.set(indIdx, indIdx);
+                                    
+                                    primGeom.setIndex(new THREE.BufferAttribute(indxBuff, 1));
+                                }
                             } else {
-                                mesh = createCube(0.2, 0.2, 0.2, 0xFC0303);
-                                mesh.name = `(ERROR) Primitive ${i3}`;
+                                if (error === "")
+                                    color = clRed;
+                                primGeom = createCube(0.2, 0.2, 0.2, 0, true);
                             }
-                            surfaceObject.add(mesh);
-                            i3++;
+                            primGeoms.push(primGeom);
                         }
                     }
-                    object.add(surfaceObject);
-                    i2++;
+                    surfGeoms.push(mergeGeometries(primGeoms, false));
                 }
-                objects.push(object);
+                objects.push(new THREE.Mesh(mergeGeometries(surfGeoms, false),
+                    new THREE.MeshBasicMaterial({ "color": color, "side": THREE.DoubleSide })));
             }
             reader.seek(modelStart + allocSize);
             return objects;
@@ -467,6 +497,8 @@ reference instead of a model index, causing an imblanence with the model count. 
             for (let i = 0; i < dependencyCount; i++)
                 reader.skip(8);
             
+            // allocSize is the size of the section data of it's entirity AFTER the section count and the subsequent
+            // section sizes (if there are any)
             const allocSize = reader.readUInt32BE();
             const modelCount = reader.readUInt32BE();
             const sectionCount = reader.readUInt32BE();
@@ -501,40 +533,47 @@ reference instead of a model index, causing an imblanence with the model count. 
                 switch (type) {
                     case "BWIG":
                         // N/A
-                        widget.object = createCube(0.2, 0.2, 0.2, 0xFFFFFF);
+                        widget.obj = createCube(0.2, 0.2, 0.2, clWhite);
                         break;
                     case "HWIG":
                         // N/A
-                        widget.object = createCube(0.2, 0.2, 0.2, 0x000000);
+                        widget.obj = createCube(0.2, 0.2, 0.2, clBlack);
                         break;
                     case "LITE":
                         reader.skip(32);
-                        widget.object = createCube(0.2, 0.2, 0.2, 0xFCFC03);
+                        widget.obj = createCube(0.2, 0.2, 0.2, clYellow);
                         break;
                     case "CAMR":
                         const proj = reader.readUInt32BE();
                         switch (proj) {
-                            case 0:
-                                widget.object = new THREE.PerspectiveCamera(reader.readFloatBE(), reader.readFloatBE(),
-                                    reader.readFloatBE(), reader.readFloatBE());
+                            case CAMRProj_Perspective:
+                                const fov1 = reader.readFloatBE();
+                                const aspect1 = reader.readFloatBE();
+                                const near1 = reader.readFloatBE();
+                                const far1 = reader.readFloatBE();
+                                widget.obj = new THREE.PerspectiveCamera(fov1, aspect1, near1, far1);
                                 break;
-                            case 1:
-                                widget.object = new THREE.OrthographicCamera(reader.readFloatBE(),
-                                    reader.readFloatBE(), reader.readFloatBE(), reader.readFloatBE(),
-                                    reader.readFloatBE(), reader.readFloatBE());
+                            case CAMRProj_Orthographic:
+                                const left2 = reader.readFloatBE();
+                                const right2 = reader.readFloatBE();
+                                const top2 = reader.readFloatBE();
+                                const bottom2 = reader.readFloatBE();
+                                const near2 = reader.readFloatBE();
+                                const far2 = reader.readFloatBE();
+                                widget.obj = new THREE.OrthographicCamera(left2, right2, top2, bottom2, near2, far2);
                                 break;
                             default:
                                 throw new Error(`Unknown CameraProjection type: \"${proj}\"`);
                         }
-                        widget.object.updateProjectionMatrix();
+                        widget.obj.updateProjectionMatrix();
                         break;
                     case "GRUP":
                         reader.skip(3);
-                        widget.object = createCube(0.2, 0.2, 0.2, 0x03FC03);
+                        widget.obj = createCube(0.2, 0.2, 0.2, clGreen);
                         break;
                     case "PANE":
                         reader.skip(20);
-                        widget.object = createCube(0.2, 0.2, 0.2, 0xFC8003);
+                        widget.obj = createCube(0.2, 0.2, 0.2, clOrange);
                         break;
                     case "IMGP":
                         reader.skip(12);
@@ -546,37 +585,37 @@ reference instead of a model index, causing an imblanence with the model count. 
                         const uvs1 = [];
                         for (let i = 0; i < uvCount1; i++)
                             uvs1.push([reader.readFloatBE(), reader.readFloatBE()]);
-                        widget.object = createPlane(coordCount1, coords1, uvCount1, uvs1, 0x808080);
+                        widget.obj = createPlane(coordCount1, coords1, uvCount1, uvs1, clGrey);
                         break;
                     case "METR":
                         reader.skip(10);
-                        widget.object = createCube(0.2, 0.2, 0.2, 0x03FCFC);
+                        widget.obj = createCube(0.2, 0.2, 0.2, clAqua);
                         break;
                     case "MODL":
                         const cmdlRef = reader.readUInt32BE();
                         const modelIndex = reader.readUInt32BE();
                         reader.skip(4);
                         if (cmdlRef == 0xFFFFFFFF)
-                            widget.object = models[modelIndex];
+                            widget.obj = models[modelIndex];
                         else
                             // TODO: Parse CMDL (is that ever used in MP2?)
-                            widget.object = createCube(0.2, 0.2, 0.2, 0xFC0303);
+                            widget.obj = createCube(0.2, 0.2, 0.2, clRed);
                         break;
                     case "TBGP":
                         reader.skip(1);
-                        widget.object = createCube(0.2, 0.2, 0.2, 0x0303FC);
+                        widget.obj = createCube(0.2, 0.2, 0.2, clBlue);
                         break;
                     case "SLGP":
                         reader.skip(16);
-                        widget.object = createCube(0.2, 0.2, 0.2, 0x7703FC);
+                        widget.obj = createCube(0.2, 0.2, 0.2, clMagenta);
                         break;
                     case "TXPN":
                         reader.skip(118);
-                        widget.object = createCube(0.2, 0.2, 0.2, 0x9803FC);
+                        widget.obj = createCube(0.2, 0.2, 0.2, clPurple);
                         break;
                     case "ENRG":
                         reader.skip(4);
-                        widget.object = createCube(0.2, 0.2, 0.2, 0xFC03FC);
+                        widget.obj = createCube(0.2, 0.2, 0.2, clPink);
                         break;
                     case "BMTR":
                         const coordCount2 = reader.readUInt32BE();
@@ -588,14 +627,14 @@ reference instead of a model index, causing an imblanence with the model count. 
                         for (let i = 0; i < uvCount2; i++)
                             uvs2.push([reader.readFloatBE(), reader.readFloatBE()]);
                         reader.skip(4);
-                        widget.object = createPlane(coordCount2, coords2, uvCount2, uvs2, 0xFC8003);
+                        widget.obj = createPlane(coordCount2, coords2, uvCount2, uvs2, clGrey);
                         break;
                     case "BGND":
                         throw new Error("Unsupported widget type: \"BGND\"");
                     default:
                         throw new Error(`Unknown widget type: "${type}"`);
                 }
-                widget.object.name = widget.name;
+                widget.obj.name = widget.name;
                 
                 if (reader.readBoolean())
                     reader.skip(2);
