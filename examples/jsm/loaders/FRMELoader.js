@@ -468,8 +468,7 @@ reference instead of a model index, causing an imblanence with the model count. 
                                     primGeom.setIndex(new THREE.BufferAttribute(indxBuff, 1));
                                 }
                             } else {
-                                if (error === "")
-                                    color = clRed;
+                                color = clRed;
                                 primGeom = createCube(0.2, 0.2, 0.2, 0, true);
                             }
                             primGeoms.push(primGeom);
