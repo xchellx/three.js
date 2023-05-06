@@ -81,6 +81,12 @@ class FRMELoader extends Loader {
             GX_DRAW_TRIANGLE_STRIP = 0x98,
             GX_DRAW_TRIANGLE_FAN = 0xA0;
         
+        const UVAnimType_UVScrollAnim = 0x02,
+            UVAnimType_RotationAnim = 0x03,
+            UVAnimType_HorzFilmstripAnim = 0x04,
+            UVAnimType_VertFilmstripAnim = 0x05,
+            UVAnimType_EnvMapCylinderAnim = 0x07;
+        
         function createCube(w, h, d, c, g) {
             const geometry = new THREE.BoxGeometry(w, h, d);
             return (g ?? false)
@@ -196,19 +202,19 @@ class FRMELoader extends Loader {
                 for (let i3 = 0; i3 < uvAnimsCount; i3++) {
                     const uvAnimationType = reader.readUInt32BE();
                     switch (uvAnimationType) {
-                        case 2:
+                        case UVAnimType_UVScrollAnim:
                             reader.skip(16);
                             break;
-                        case 3:
+                        case UVAnimType_RotationAnim:
                             reader.skip(8);
                             break;
-                        case 4:
+                        case UVAnimType_HorzFilmstripAnim:
                             reader.skip(16);
                             break;
-                        case 5:
+                        case UVAnimType_VertFilmstripAnim:
                             reader.skip(16);
                             break;
-                        case 7:
+                        case UVAnimType_EnvMapCylinderAnim:
                             reader.skip(8);
                             break;
                     }
