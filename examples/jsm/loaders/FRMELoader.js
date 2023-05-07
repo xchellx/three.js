@@ -311,7 +311,7 @@ reference instead of a model index, causing an imblanence with the model count. 
                     reader.skip(12 + 4 + extraDataSize);
                     
                     // 32byte alignment
-                    reader.seek((reader.offset + 31) & ~31);
+                    reader.seek(((((reader.offset + ((1 << 4) >>> 0) - 1) >> 4) >>> 0) << 4) >>> 0);
                     
                     surface.primitives = [];
                     const displayListStart = reader.offset;
@@ -426,7 +426,6 @@ reference instead of a model index, causing an imblanence with the model count. 
                 const object = new THREE.Group();
                 let i2 = 0;
                 for (const surface of surfaces) {
-                    // TODO: surface.pivot
                     let color = clGrey;
                     const primGeoms = [];
                     for (const primitive of surface.primitives) {
