@@ -81,11 +81,12 @@ class FRMELoader extends Loader {
             GX_DRAW_TRIANGLE_STRIP = 0x98,
             GX_DRAW_TRIANGLE_FAN = 0xA0;
         
-        const UVAnimType_UVScrollAnim = 0x02,
-            UVAnimType_RotationAnim = 0x03,
-            UVAnimType_HorzFilmstripAnim = 0x04,
-            UVAnimType_VertFilmstripAnim = 0x05,
-            UVAnimType_EnvMapCylinderAnim = 0x07;
+        // UV Animation types
+        const UVAnim_UVScroll = 0x02,
+            UVAnim_Rotation = 0x03,
+            UVAnim_HorzFilmstrip = 0x04,
+            UVAnim_VertFilmstrip = 0x05,
+            UVAnim_EnvMapCylinder = 0x07;
         
         function createCube(w, h, d, c, g) {
             const geometry = new THREE.BoxGeometry(w, h, d);
@@ -118,6 +119,14 @@ class FRMELoader extends Loader {
             return new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ "color": c, "side": THREE.DoubleSide }));
         }
         
+        function createSectionTracker(reader, sectionSizes) {
+            return {
+                "curOffs": reader.offset,
+                "curSection": 0,
+                "nextOffs": reader.offset + sectionSizes[0]
+            };
+        }
+        
         function gotoNextSection(reader, sectionTracker, sectionSizes) {
             reader.seek(sectionTracker.nextOffs);
             sectionTracker.curOffs = reader.offset;
@@ -131,11 +140,7 @@ class FRMELoader extends Loader {
                 sectionSizes.push(reader.readUInt32BE());
             
             const modelStart = reader.offset;
-            const sectionTracker = {
-                "curOffs": reader.offset,
-                "curSection": 0,
-                "nextOffs": reader.offset + sectionSizes[0]
-            };
+            const sectionTracker = createSectionTracker(reader, sectionSizes);
             
             const objects = [];
             
@@ -202,19 +207,19 @@ class FRMELoader extends Loader {
                 for (let i3 = 0; i3 < uvAnimsCount; i3++) {
                     const uvAnimationType = reader.readUInt32BE();
                     switch (uvAnimationType) {
-                        case UVAnimType_UVScrollAnim:
+                        case UVAnim_UVScroll:
                             reader.skip(16);
                             break;
-                        case UVAnimType_RotationAnim:
+                        case UVAnim_Rotation:
                             reader.skip(8);
                             break;
-                        case UVAnimType_HorzFilmstripAnim:
+                        case UVAnim_HorzFilmstrip:
                             reader.skip(16);
                             break;
-                        case UVAnimType_VertFilmstripAnim:
+                        case UVAnim_VertFilmstrip:
                             reader.skip(16);
                             break;
-                        case UVAnimType_EnvMapCylinderAnim:
+                        case UVAnim_EnvMapCylinder:
                             reader.skip(8);
                             break;
                     }
@@ -418,10 +423,11 @@ reference instead of a model index, causing an imblanence with the model count. 
                     surfaces.push(surface);
                 }
                 
-                let color = clGrey;
-                const surfGeoms = [];
+                const object = new THREE.Group();
+                let i2 = 0;
                 for (const surface of surfaces) {
                     // TODO: surface.pivot
+                    let color = clGrey;
                     const primGeoms = [];
                     for (const primitive of surface.primitives) {
                         if (primitive.primitiveType !== GX_NOP) {
@@ -482,10 +488,16 @@ reference instead of a model index, causing an imblanence with the model count. 
                             primGeoms.push(primGeom);
                         }
                     }
-                    surfGeoms.push(mergeGeometries(primGeoms, false));
+                    
+                    const surfaceObject = new THREE.Mesh(mergeGeometries(primGeoms, false),
+                        new THREE.MeshBasicMaterial({ "color": color, "side": THREE.DoubleSide }));
+                    surfaceObject.name = `M${i}_S${i2}`;
+                    surfaceObject.pivot = new THREE.Vector3(...surface.pivot);
+                    
+                    object.add(surfaceObject);
+                    i2++
                 }
-                objects.push(new THREE.Mesh(mergeGeometries(surfGeoms, false),
-                    new THREE.MeshBasicMaterial({ "color": color, "side": THREE.DoubleSide })));
+                objects.push(object);
             }
             reader.seek(modelStart + allocSize);
             return objects;

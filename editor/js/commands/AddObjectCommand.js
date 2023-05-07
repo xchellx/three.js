@@ -55,6 +55,7 @@ class AddObjectCommand extends Command {
 
 		if ( this.object === undefined ) {
 
+			window.overrideObjectLoader( ObjectLoader );
 			const loader = new ObjectLoader();
 			this.object = loader.parse( json.object );
 

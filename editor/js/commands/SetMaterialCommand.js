@@ -60,6 +60,7 @@ class SetMaterialCommand extends Command {
 
 		function parseMaterial( json ) {
 
+			window.overrideObjectLoader( ObjectLoader );
 			const loader = new ObjectLoader();
 			const images = loader.parseImages( json.images );
 			const textures = loader.parseTextures( json.textures, images );

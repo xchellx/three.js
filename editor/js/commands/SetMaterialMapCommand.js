@@ -116,6 +116,7 @@ class SetMaterialMapCommand extends Command {
 			let map = null;
 			if ( json !== null ) {
 
+				window.overrideObjectLoader( ObjectLoader );
 				const loader = new ObjectLoader();
 				const images = loader.parseImages( json.images );
 				const textures = loader.parseTextures( [ json ], images );

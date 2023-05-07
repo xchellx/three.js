@@ -880,6 +880,7 @@ function Loader( editor ) {
 
 			{
 
+				window.overrideObjectLoader( THREE.ObjectLoader );
 				const loader = new THREE.ObjectLoader();
 				loader.setResourcePath( scope.texturePath );
 

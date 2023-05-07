@@ -188,6 +188,8 @@ function Viewport( editor ) {
 
 	sceneHelpers.add( transformControls );
 
+	editor.getTransformControls = function () { return transformControls; }
+
 	// object picking
 
 	const raycaster = new THREE.Raycaster();

@@ -651,6 +651,7 @@ Editor.prototype = {
 
 	fromJSON: async function ( json ) {
 
+		window.overrideObjectLoader( THREE.ObjectLoader );
 		var loader = new THREE.ObjectLoader();
 		var camera = await loader.parseAsync( json.camera );
 

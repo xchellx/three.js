@@ -75,6 +75,7 @@ class SetGeometryCommand extends Command {
 
 		function parseGeometry( data ) {
 
+			window.overrideObjectLoader( ObjectLoader );
 			const loader = new ObjectLoader();
 			return loader.parseGeometries( [ data ] )[ data.uuid ];
 

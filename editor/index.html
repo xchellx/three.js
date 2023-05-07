@@ -60,6 +60,19 @@
 
 		<script type="module">
 
+			window.overrideObjectLoader = function( loader ) {
+				
+				const ogParseObject = loader.prototype.parseObject;
+				loader.prototype.parseObject = function( data, ...args ) {
+					
+					const object = ogParseObject.call( this, data, ...args );
+					object.pivot = data.pivot;
+					return object;
+					
+				}
+				
+			}
+
 			import * as THREE from 'three';
 
 			import { Editor } from './js/Editor.js';
@@ -82,6 +95,63 @@
 			};
 
 			THREE.Object3D.DefaultUp = new THREE.Vector3(0, 0, 1);
+
+			THREE.Object3D.prototype.pivot = undefined;
+
+			const ogToJSON = THREE.Object3D.prototype.toJSON;
+			THREE.Object3D.prototype.toJSON = function( ...args ) {
+				
+				const output = ogToJSON.call( this, ...args );
+				if ( ( typeof output !== 'undefined' ) && output !== null )
+					if ( ( typeof output.object !== 'undefined' ) && output.object !== null )
+						output.object.pivot = this.pivot;
+				return output;
+				
+			}
+
+			const ogCopy = THREE.Object3D.prototype.copy;
+			THREE.Object3D.prototype.copy = function( source, ...args ) {
+				
+				const _this = ogCopy.call( this, source, ...args );
+				_this.pivot = source.pivot;
+				return _this;
+				
+			}
+
+			// https://github.com/mrdoob/three.js/issues/15965#issuecomment-473109926
+			THREE.Object3D.prototype.updateMatrix = function () {
+
+				this.matrix.compose( this.position, this.quaternion, this.scale );
+
+				var pivot = this.pivot;
+
+				if ( ( typeof pivot !== 'undefined' ) && pivot !== null ) {
+
+					if ( ! this.__wasSet__ ) {
+
+						this.__wasSet__ = true;
+						this.oldMatrix = this.matrix.clone();
+
+					}
+
+					var px = pivot.x, py = pivot.y,  pz = pivot.z;
+					var te = this.matrix.elements;
+
+					te[ 12 ] += px - te[ 0 ] * px - te[ 4 ] * py - te[ 8 ] * pz;
+					te[ 13 ] += py - te[ 1 ] * px - te[ 5 ] * py - te[ 9 ] * pz;
+					te[ 14 ] += pz - te[ 2 ] * px - te[ 6 ] * py - te[ 10 ] * pz;
+
+				} else if ( this.__wasSet__ ) {
+
+					this.__wasSet__ = false;
+					this.matrix.copy(this.oldMatrix);
+					this.oldMatrix = undefined;
+
+				}
+
+				this.matrixWorldNeedsUpdate = true;
+
+			};
 
 			//
 

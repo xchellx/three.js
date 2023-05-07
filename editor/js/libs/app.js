@@ -6,6 +6,7 @@ var APP = {
 		renderer.setPixelRatio( window.devicePixelRatio ); // TODO: Use player.setPixelRatio()
 		renderer.outputEncoding = THREE.sRGBEncoding;
 
+		window.overrideObjectLoader( THREE.ObjectLoader );
 		var loader = new THREE.ObjectLoader();
 		var camera, scene;
 
